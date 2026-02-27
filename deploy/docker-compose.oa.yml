@@ -1,0 +1,94 @@
+# OA 后端四服务（网关、门户、用户、审批流）
+# 与 deploy/docker-compose.yml 合并使用，先启动 mysql、minio，再起 OA 服务。
+#
+# 使用步骤（在项目根目录）：
+#   1. mvn package -DskipTests
+#   2. cd deploy && docker compose -f docker-compose.yml up -d mysql minio
+#   3. docker compose -f docker-compose.yml -f docker-compose.oa.yml build
+#   4. docker compose -f docker-compose.yml -f docker-compose.oa.yml up -d oa-user-service oa-workflow-service oa-portal oa-gateway
+#
+# 访问：http://localhost:8080/api（网关）；前端代理到 8080 即可。
+
+name: backend-middleware
+
+services:
+  oa-user-service:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.user
+    image: oa-user-service:local
+    container_name: oa-user-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8082"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/oa?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - middleware
+
+  oa-workflow-service:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.workflow
+    image: oa-workflow-service:local
+    container_name: oa-workflow-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8083"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/oa?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      APP_MINIO_ENDPOINT: "http://minio:9000"
+      APP_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      APP_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - middleware
+
+  oa-portal:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.portal
+    image: oa-portal:local
+    container_name: oa-portal
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8081"
+      APP_USER_SERVICE_URL: "http://oa-user-service:8082"
+      APP_WORKFLOW_SERVICE_URL: "http://oa-workflow-service:8083"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - oa-user-service
+      - oa-workflow-service
+    networks:
+      - middleware
+
+  oa-gateway:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.gateway
+    image: oa-gateway:local
+    container_name: oa-gateway
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8080"
+      GATEWAY_PORTAL_URI: "http://oa-portal:8081"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - oa-portal
+    networks:
+      - middleware

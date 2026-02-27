@@ -1,0 +1,7 @@
+# 需先在项目根目录执行：mvn package -DskipTests
+# 构建：docker build -f deploy/docker/Dockerfile.user -t oa-user-service:local .
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY oa-user-service/target/oa-user-service-*.jar app.jar
+EXPOSE 8082
+ENTRYPOINT ["java", "-jar", "app.jar"]

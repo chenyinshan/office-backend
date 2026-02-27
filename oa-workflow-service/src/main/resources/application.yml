@@ -1,0 +1,22 @@
+server:
+  port: 8083
+spring:
+  application:
+    name: oa-workflow-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/oa?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+# MinIO（附件存储），本地可用 docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+app:
+  minio:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: oa-attachments

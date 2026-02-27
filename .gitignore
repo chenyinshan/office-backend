@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+
+# Java / Maven
+target/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker / 运行时
+*.pid
+
+# 环境配置（自己本地留 .env，示例用 .env.example）
+.env
+
+# 其他
+docs/*

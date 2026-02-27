@@ -1,0 +1,7 @@
+# 需先在项目根目录执行：mvn package -DskipTests
+# 构建：docker build -f deploy/docker/Dockerfile.gateway -t oa-gateway:local .
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY oa-gateway/target/oa-gateway-*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

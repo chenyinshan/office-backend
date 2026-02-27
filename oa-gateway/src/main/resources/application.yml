@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: oa-gateway
+  cloud:
+    gateway:
+      routes:
+        # 仅将 /api 转发到 portal，portal 再内部分发到 user/workflow
+        - id: portal-api
+          uri: ${GATEWAY_PORTAL_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=0

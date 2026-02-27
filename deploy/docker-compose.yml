@@ -1,0 +1,211 @@
+# 本地/测试环境中间件一键启动
+# 与 docs/backend-stack-summary.md 第十节对应
+# 使用：在项目根目录执行 docker compose -f deploy/docker-compose.yml up -d
+
+name: backend-middleware
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: middleware-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_CHARSET: utf8mb4
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - middleware
+
+  redis:
+    image: redis:7-alpine
+    container_name: middleware-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - middleware
+
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: middleware-nacos
+    profiles:
+      - nacos   # 默认 up 不启动；需用时：docker compose --profile nacos up -d
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      SPRING_DATASOURCE_PLATFORM: embedded
+      # 开发环境先关闭鉴权，避免额外配置；需要鉴权时再开启并配置 identity
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    networks:
+      - middleware
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: middleware-rocketmq-namesrv
+    restart: unless-stopped
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    volumes:
+      - rocketmq_namesrv_logs:/home/rocketmq/logs
+      - rocketmq_namesrv_store:/home/rocketmq/store
+    networks:
+      - middleware
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: middleware-rocketmq-broker
+    profiles:
+      - rocketmq   # 默认 up 不启动；需用时：docker compose --profile rocketmq up -d
+    restart: unless-stopped
+    command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/conf/broker.conf
+    environment:
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms256m -Xmx256m"
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+    volumes:
+      - rocketmq_broker_logs:/home/rocketmq/logs
+      - rocketmq_broker_store:/home/rocketmq/store
+      - ./rocketmq/broker.conf:/home/rocketmq/conf/broker.conf:ro
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - middleware
+
+  elasticsearch:
+    image: elasticsearch:8.15.0
+    container_name: middleware-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - middleware
+
+  zipkin:
+    image: openzipkin/zipkin:3.0
+    container_name: middleware-zipkin
+    restart: unless-stopped
+    ports:
+      - "9411:9411"
+    networks:
+      - middleware
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: middleware-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - middleware
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: middleware-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: ""
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - middleware
+
+  xxl-job:
+    image: xuxueli/xxl-job-admin:2.4.2
+    container_name: middleware-xxl-job
+    restart: unless-stopped
+    environment:
+      PARAMS: >-
+        --spring.datasource.url=jdbc:mysql://mysql:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+        --spring.datasource.username=root
+        --spring.datasource.password=${MYSQL_ROOT_PASSWORD:-root123}
+        --xxl.job.accessToken=
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - middleware
+
+  sentinel:
+    image: bladex/sentinel-dashboard:1.8.6
+    container_name: middleware-sentinel
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Dserver.port=8858 -Dcsp.sentinel.dashboard.server=localhost:8858"
+    ports:
+      - "8858:8858"
+    networks:
+      - middleware
+
+  minio:
+    image: minio/minio:RELEASE.2024-10-02T17-50-41Z
+    container_name: middleware-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - middleware
+
+volumes:
+  mysql_data:
+  redis_data:
+  rocketmq_namesrv_logs:
+  rocketmq_namesrv_store:
+  rocketmq_broker_logs:
+  rocketmq_broker_store:
+  es_data:
+  prometheus_data:
+  grafana_data:
+  minio_data:
+
+networks:
+  middleware:
+    driver: bridge
