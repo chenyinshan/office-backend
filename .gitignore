@@ -22,3 +22,6 @@ Thumbs.db
 .env
 
 # 其他
+
+# Matplotlib 脚本用到的本地配置/缓存
+.mplconfig/
