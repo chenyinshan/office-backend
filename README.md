@@ -1,7 +1,6 @@
-# OA 办公平台（Office Backend）
+# 办公平台（Office Backend）
 
-一个用于展示 Java 后端能力的 **轻量级 OA 平台**：包含登录鉴权、审批流、公告/通知、组织架构、报表统计，以及 **短连接 + SSE + WebSocket** 的长短连接演示。  
-整套后端被设计成「通用后台骨架」，很容易替换领域模型后复用到电商运营、工单、教育管理等其他场景。
+一个用于展示 Java 后端能力的 **平台**：包含登录鉴权、审批流、公告/通知、组织架构、报表统计，整套后端被设计成「通用后台骨架」，很容易替换领域模型后复用到电商运营、工单、教育管理等其他场景。
 
 ---
 
@@ -13,9 +12,9 @@
 - **用户与组织服务**：`oa-user-service`（用户、部门、岗位、员工、公告、站内通知）
 - **审批流服务**：`oa-workflow-service`（流程实例、任务、审批记录、附件）
 - **公共模块**：`oa-common`（统一 Result、错误码、BizException、全局异常处理等）
-- **中间件（Docker Compose 启动）**：MySQL、Redis、Nacos、RocketMQ、Sentinel、Prometheus/Grafana、XXL-JOB、MinIO 等
+- **中间件（Docker Compose 启动）**：MySQL、Redis、Nacos、MinIO、Prometheus/Grafana（自主选择）、XXL-JOB（自主选择）等
 
-对外访问路径统一为 `http://localhost:8080/api/**`（REST）和 `ws://localhost:8080/ws/**`，由网关转发到各服务。
+对外访问路径统一为 `http://localhost:8080/api/**`（REST）由网关转发到各服务。
 
 ---
 
@@ -117,8 +116,8 @@ npm run build
 
 ## 六、示例账号
 
-- `admin`：系统管理员，拥有公告发布、组织管理等权限  
-- `leader`：部门负责人角色，用于演示多级审批场景  
+- `admin`：系统管理员，拥有公告发布、组织管理等权限
+- `leader`：部门负责人角色，用于演示多级审批场景
 - 默认密码：`123456`
 
 ---
@@ -150,4 +149,3 @@ npm run build
    - 重写列表 / 详情 / 审批表单等业务页面，继续共用 Layout、登录、通知、组织管理等公共部分。
 
 通过以上步骤，可以快速从「OA 平台」演进为电商运营后台、工单系统或教育管理后台，同时最大化复用现有代码与架构。
-
