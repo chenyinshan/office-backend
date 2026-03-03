@@ -1,7 +1,23 @@
-# 需先在项目根目录执行：mvn package -DskipTests
-# 构建：docker build -f deploy/docker/Dockerfile.user -t oa-user-service:local .
+## OA 用户服务镜像构建 Dockerfile
+## 使用说明：
+##   1）在项目根目录先执行一次（打出可执行 Jar）：
+##        mvn -pl oa-user-service -am package -DskipTests
+##   2）构建镜像：
+##        docker build -f deploy/docker/Dockerfile.user -t oa-user-service:local .
+##   3）本地运行容器示例：
+##        docker run --rm -p 8082:8082 --name oa-user-service oa-user-service:local
+
+# 运行时基础镜像：采用轻量级 Alpine 版 JRE 17
 FROM eclipse-temurin:17-jre-alpine
+
+# 应用工作目录，后续命令的相对路径均以此为根
 WORKDIR /app
+
+# 将 Maven 打包产物复制进容器（只匹配 oa-user-service 的可执行 Jar）
 COPY oa-user-service/target/oa-user-service-*.jar app.jar
+
+# 暴露应用端口（仅作为文档提示，实际映射由 docker run / compose 决定）
 EXPOSE 8082
+
+# 容器启动命令：以 Jar 形式启动 Spring Boot 应用
 ENTRYPOINT ["java", "-jar", "app.jar"]

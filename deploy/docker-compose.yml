@@ -1,90 +1,127 @@
 # 本地/测试环境中间件一键启动
 # 与 docs/backend-stack-summary.md 第十节对应
-# 使用：在项目根目录执行 docker compose -f deploy/docker-compose.yml up -d
+# 使用方式：
+#   - 仅启动 MySQL / Redis / MinIO：
+#       docker compose -f deploy/docker-compose.yml up -d
+#   - 启动并包含 Nacos（用于 Dubbo / 配置中心）：
+#       docker compose -f deploy/docker-compose.yml --profile nacos up -d
+#   - 停止并移除容器：
+#       docker compose -f deploy/docker-compose.yml --profile nacos down
 
 name: backend-middleware
-
 services:
+  #-----------------------------
+  # 1. MySQL：业务数据库 + Nacos 外部数据源
+  #-----------------------------
   mysql:
     image: mysql:8.0
     container_name: middleware-mysql
     restart: unless-stopped
     environment:
+      # root 账号密码（可通过环境变量 MYSQL_ROOT_PASSWORD 覆盖，默认 root123）
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      # 默认字符集，保证中文 / emoji 正常存储
       MYSQL_CHARSET: utf8mb4
     ports:
+      # 暴露 MySQL 3306 端口到宿主机，便于本地工具连接
       - "3306:3306"
     volumes:
+      # 数据持久化目录
       - mysql_data:/var/lib/mysql
+      # 初始化 SQL 目录，容器首次启动时会自动执行 ./mysql-init 下的脚本
       - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    # 使用兼容的认证插件 + utf8mb4 字符集
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # 健康检查：用于判断 MySQL 是否就绪
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 10s   # 探测间隔
+      timeout: 5s     # 单次超时时间
+      retries: 5      # 连续失败次数
     networks:
       - middleware
 
+  #-----------------------------
+  # 2. Redis：登录 Token / 用户二级缓存
+  #-----------------------------
   redis:
     image: redis:7-alpine
     container_name: middleware-redis
     restart: unless-stopped
     ports:
+      # 暴露 Redis 6379 端口到宿主机
       - "6379:6379"
     volumes:
+      # 将 Redis 数据目录挂载到本地卷，实现数据持久化
       - redis_data:/data
     networks:
       - middleware
 
+  #-----------------------------
+  # 3. Nacos：注册中心 / 配置中心
+  #   - 默认不随 up 一起启动，需通过 --profile nacos 显式启用
+  #-----------------------------
   nacos:
     image: nacos/nacos-server:v2.3.0
     container_name: middleware-nacos
     profiles:
-      - nacos   # 默认 up 不启动；需用时：docker compose --profile nacos up -d
+      - nacos   # 只在指定 profile=nacos 时才启动
     restart: unless-stopped
     environment:
+      # 单机模式，适合本地和测试环境
       MODE: standalone
+      # 注册实例时优先使用主机名
       PREFER_HOST_MODE: hostname
-      # 使用外部 MySQL 作为 Nacos 数据源（对应下方 mysql 服务），库名建议为 nacos
+      # 使用外部 MySQL 作为 Nacos 数据源（对应上面的 mysql 服务），库名为 nacos
       SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: mysql
-      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_HOST: mysql          # 在 compose 网络中的 MySQL 服务名
+      MYSQL_SERVICE_DB_NAME: nacos      # Nacos 使用的数据库名（需提前建库并导入 schema）
       MYSQL_SERVICE_PORT: 3306
       MYSQL_SERVICE_USER: root
       MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      # 开发环境先关闭鉴权，避免额外配置；需要鉴权时再开启并配置 identity
+      # 开发环境关闭鉴权；生产环境建议改为 true，并配置账号
       NACOS_AUTH_ENABLE: "false"
+      # JVM 堆大小设置
       JVM_XMS: 256m
       JVM_XMX: 256m
     ports:
+      # 8848：HTTP 控制台和 OpenAPI
       - "8848:8848"
+      # 9848/9849：gRPC 端口（客户端/集群内部通信）
       - "9848:9848"
       - "9849:9849"
     networks:
       - middleware
 
-  
-
+  #-----------------------------
+  # 4. MinIO：对象存储，用于附件上传
+  #-----------------------------
   minio:
     image: minio/minio:RELEASE.2024-10-02T17-50-41Z
     container_name: middleware-minio
     restart: unless-stopped
+    # 以 server 模式启动，控制台端口为 9001
     command: server /data --console-address ":9001"
     environment:
+      # MinIO 管理员账号密码，生产环境建议通过环境变量覆盖
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
+      # 9000：S3 兼容 API；9001：Web 控制台
       - "9000:9000"
       - "9001:9001"
     volumes:
+      # 对象数据持久化目录
       - minio_data:/data
     networks:
       - middleware
 
 volumes:
+  # MySQL 数据卷
   mysql_data:
+  # Redis 数据卷
   redis_data:
+  # 以下卷为 RocketMQ / ES / Prometheus / Grafana 等中间件预留（当前未启用）
   rocketmq_namesrv_logs:
   rocketmq_namesrv_store:
   rocketmq_broker_logs:
@@ -92,8 +129,10 @@ volumes:
   es_data:
   prometheus_data:
   grafana_data:
+  # MinIO 对象存储数据卷
   minio_data:
 
 networks:
+  # 所有中间件共用的桥接网络，容器之间可通过服务名互相访问
   middleware:
     driver: bridge
