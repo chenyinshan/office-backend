@@ -21,6 +21,19 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>oa-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
@@ -40,6 +53,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 覆盖父 POM 的 skip=true，确保本服务可以正常 run -->
+                    <skip>false</skip>
+                    <!-- 不 fork，方便在当前终端看到完整启动日志 -->
+                    <fork>false</fork>
+                    <mainClass>com.example.oa.portal.OaPortalApplication</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>

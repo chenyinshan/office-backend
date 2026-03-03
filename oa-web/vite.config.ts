@@ -8,6 +8,7 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, 'src') },
   },
   server: {
+    host: '127.0.0.1', // 仅监听本机，避免 Node 枚举网卡报错 uv_interface_addresses
     port: 5173,
     proxy: {
       '/api': {

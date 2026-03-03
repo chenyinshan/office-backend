@@ -12,9 +12,9 @@
     <description>Spring Boot + Dubbo 办公网关/后端示例骨架（父工程）</description>
 
     <modules>
-        <module>service-demo</module>
         <!-- OA 办公管理系统 -->
         <module>oa-common</module>
+        <module>oa-api</module>
         <module>oa-user-service</module>
         <module>oa-workflow-service</module>
         <module>oa-gateway</module>
@@ -25,6 +25,8 @@
         <java.version>17</java.version>
         <spring.boot.version>3.2.5</spring.boot.version>
         <spring.cloud.version>2023.0.0</spring.cloud.version>
+        <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
+        <dubbo.version>3.2.11</dubbo.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
@@ -46,6 +48,18 @@
                 <version>${spring.cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.dubbo</groupId>
+                <artifactId>dubbo-spring-boot-starter</artifactId>
+                <version>${dubbo.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.baomidou</groupId>
@@ -84,6 +98,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <!-- 父 POM 无 main 类，reactor 执行 spring-boot:run 时跳过，避免报错 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
             </plugin>
         </plugins>
     </build>

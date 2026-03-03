@@ -8,6 +8,11 @@ spring:
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
 
 mybatis-plus:
   configuration:
@@ -20,3 +25,15 @@ app:
     access-key: minioadmin
     secret-key: minioadmin
     bucket: oa-attachments
+
+# Dubbo：使用 Nacos 作为注册中心，后续可在 com.example.oa.workflow.dubbo 下暴露 Dubbo 服务
+dubbo:
+  application:
+    name: ${spring.application.name}
+  protocol:
+    name: dubbo
+    port: -1
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  scan:
+    base-packages: com.example.oa.workflow.dubbo

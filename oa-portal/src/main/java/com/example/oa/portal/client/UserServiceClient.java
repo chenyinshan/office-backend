@@ -1,103 +1,49 @@
 package com.example.oa.portal.client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.oa.api.IUserAuthApi;
+import com.example.oa.api.dto.UserInfoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.Map;
 
 /**
- * 调 user-service /api/auth/me，根据 token 解析出 userId、employeeId。
+ * 根据 token 获取当前用户（userId、employeeId 等）。优先通过 Dubbo 调用 user-service，走 Nacos 发现。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class UserServiceClient {
 
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Value("${app.user-service-url:http://localhost:8082}")
-    private String userServiceUrl;
+    @DubboReference
+    private IUserAuthApi userAuthApi;
 
     /**
-     * 用 token 调 /api/auth/me，成功时返回 userId，失败或未登录返回 null。
+     * 用 token 通过 Dubbo 调 user-service 获取当前用户，成功时返回 userId，失败或未登录返回 null。
      */
     public Long getUserIdFromToken(String token) {
         if (token == null || token.isBlank()) return null;
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token.trim());
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> resp = restTemplate.exchange(
-                    userServiceUrl + "/api/auth/me",
-                    HttpMethod.GET,
-                    entity,
-                    String.class);
-            if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> body = objectMapper.readValue(resp.getBody(), Map.class);
-                Object code = body.get("code");
-                if (code != null && Integer.valueOf(0).equals(Integer.valueOf(code.toString()))) {
-                    Object data = body.get("data");
-                    if (data instanceof Map) {
-                        Object userId = ((Map<?, ?>) data).get("userId");
-                        if (userId instanceof Number) return ((Number) userId).longValue();
-                    }
-                }
-            }
+            UserInfoDTO user = userAuthApi.getCurrentUser(token.trim());
+            return user != null ? user.getUserId() : null;
         } catch (Exception e) {
-            log.debug("user-service /api/auth/me 调用失败: {}", e.getMessage());
+            log.debug("Dubbo IUserAuthApi.getCurrentUser 调用失败: {}", e.getMessage());
+            return null;
         }
-        return null;
     }
 
     /**
-     * 同 getUserIdFromToken，并返回 employeeId（用于 X-Employee-Id）；无则返回 null。
+     * 同 getUserIdFromToken，并返回 employeeId（用于 X-Employee-Id）；无则用 userId 填充。
      */
     public long[] getUserIdAndEmployeeIdFromToken(String token) {
         if (token == null || token.isBlank()) return null;
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token.trim());
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> resp = restTemplate.exchange(
-                    userServiceUrl + "/api/auth/me",
-                    HttpMethod.GET,
-                    entity,
-                    String.class);
-            if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> body = objectMapper.readValue(resp.getBody(), Map.class);
-                Object code = body.get("code");
-                if (code != null && Integer.valueOf(0).equals(Integer.valueOf(code.toString()))) {
-                    Object data = body.get("data");
-                    if (data instanceof Map) {
-                        Map<?, ?> d = (Map<?, ?>) data;
-                        Long userId = toLong(d.get("userId"));
-                        Long employeeId = toLong(d.get("employeeId"));
-                        if (userId != null) {
-                            return new long[]{userId, employeeId != null ? employeeId : userId};
-                        }
-                    }
-                }
-            }
+            UserInfoDTO user = userAuthApi.getCurrentUser(token.trim());
+            if (user == null || user.getUserId() == null) return null;
+            long employeeId = user.getEmployeeId() != null ? user.getEmployeeId() : user.getUserId();
+            return new long[]{user.getUserId(), employeeId};
         } catch (Exception e) {
-            log.debug("user-service /api/auth/me 调用失败: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    private static Long toLong(Object o) {
-        if (o == null) return null;
-        if (o instanceof Number) return ((Number) o).longValue();
-        try {
-            return Long.parseLong(o.toString());
-        } catch (NumberFormatException e) {
+            log.debug("Dubbo IUserAuthApi.getCurrentUser 调用失败: {}", e.getMessage());
             return null;
         }
     }

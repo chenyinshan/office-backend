@@ -42,6 +42,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 覆盖父 POM 的 skip=true，确保网关可以正常 run -->
+                    <skip>false</skip>
+                    <!-- 不 fork，方便在当前终端看到完整启动日志 -->
+                    <fork>false</fork>
+                    <mainClass>com.example.oa.gateway.OaGatewayApplication</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>

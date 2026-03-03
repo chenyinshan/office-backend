@@ -20,13 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 登录与当前用户：校验密码、发放 token、查询用户信息。
- * token 当前为内存 Map，后续可改为 Redis 或 JWT。
+ * Token 存 Redis（多实例共享）；用户信息走 L1 Caffeine + L2 Redis 二级缓存。
  */
 @Service
 @RequiredArgsConstructor
@@ -38,9 +36,8 @@ public class AuthService {
     private final SysDeptMapper deptMapper;
     private final SysPostMapper postMapper;
     private final PasswordEncoder passwordEncoder;
-
-    /** 简单内存 token 存储：token -> userId，后续可迁到 Redis */
-    private static final Map<String, Long> TOKEN_STORE = new ConcurrentHashMap<>();
+    private final AuthTokenStore tokenStore;
+    private final TwoLevelUserInfoCache userInfoCache;
 
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse login(String username, String password) {
@@ -61,29 +58,31 @@ public class AuthService {
                 .set(SysUserAccount::getLastLoginAt, LocalDateTime.now()));
 
         String token = UUID.randomUUID().toString();
-        TOKEN_STORE.put(token, account.getId());
+        tokenStore.put(token, account.getId());
 
         UserInfoVo user = buildUserInfo(account.getId());
+        userInfoCache.put(account.getId(), user);
         return LoginResponse.builder().token(token).user(user).build();
     }
 
     /**
-     * 根据 token 获取当前用户信息；token 无效或过期返回 null（由 Controller 抛 401）
+     * 根据 token 获取当前用户信息；token 无效或过期返回 null（由 Controller 抛 401）。
+     * 用户信息先查 L1 -> L2 -> DB，并回填缓存。
      */
     public UserInfoVo getCurrentUser(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
-        Long userId = TOKEN_STORE.get(token.trim());
+        Long userId = tokenStore.get(token.trim());
         if (userId == null) {
             return null;
         }
-        return buildUserInfo(userId);
+        return userInfoCache.get(userId, () -> buildUserInfo(userId));
     }
 
     public void logout(String token) {
         if (token != null && !token.isBlank()) {
-            TOKEN_STORE.remove(token.trim());
+            tokenStore.remove(token.trim());
         }
     }
 

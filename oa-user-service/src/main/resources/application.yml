@@ -8,7 +8,41 @@ spring:
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+
+# 二级缓存：L1 Caffeine / L2 Redis
+app:
+  cache:
+    user-info:
+      l1-max-size: 500
+      l1-ttl-seconds: 300
+      l2-ttl-seconds: 600
+  auth:
+    token-prefix: "oa:auth:token:"
+    token-ttl-hours: 24
 
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+
+# Dubbo：使用 Nacos 作为注册中心，暴露 Dubbo 服务
+dubbo:
+  application:
+    name: ${spring.application.name}
+  protocol:
+    name: dubbo
+    port: -1
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  scan:
+    base-packages: com.example.oa.user.dubbo

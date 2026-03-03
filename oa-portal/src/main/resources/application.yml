@@ -3,9 +3,23 @@ server:
 spring:
   application:
     name: oa-portal
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
 
-# 下游服务地址（本地开发时 user、workflow 各起一个实例）
+# 下游服务地址（RestTemplate 转发用；Dubbo 调用 user 的 getCurrentUser 已走 Nacos 发现）
 app:
   user-service-url: http://localhost:8082
   workflow-service-url: http://localhost:8083
+
+# Dubbo 消费者：从 Nacos 发现 user/workflow 等提供方
+dubbo:
+  application:
+    name: ${spring.application.name}
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  consumer:
+    check: false
 
